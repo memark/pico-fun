@@ -14,7 +14,8 @@ cortex-m-rt = "0.7"
 embedded-hal = "1.0.0"
 defmt = "1"
 defmt-rtt = "1"
-pimoroni-pico-explorer = "0.8.0"
+pimoroni-pico-explorer = { version = "0.8.0", default-features = false, features = [
+] }
 embedded-graphics = "0.7.1"
 # st7789 = "0.6.1"
 # st7735-lcd = "0.8.1"
