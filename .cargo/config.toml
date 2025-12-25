@@ -12,10 +12,9 @@
 
 [build]
 target = "thumbv6m-none-eabi"
-# Set the default target to match the Cortex-M33 in the RP2350
-# target = "thumbv8m.main-none-eabihf"
-# target = "thumbv6m-none-eabi"
-# target = "riscv32imac-unknown-none-elf"
+# target = "thumbv8m.main-none-eabihf" # RP2350
+# target = "thumbv6m-none-eabi" # RP2040
+# target = "riscv32imac-unknown-none-elf" # RP2350
 
 # Target specific options
 [target.thumbv6m-none-eabi]
@@ -31,17 +30,21 @@ target = "thumbv6m-none-eabi"
 #   have SIMD)
 linker = "flip-link"
 rustflags = [
-    "-C", "link-arg=--nmagic",
-    "-C", "link-arg=-Tlink.x",
-    "-C", "link-arg=-Tdefmt.x",
-    "-C", "no-vectorize-loops",
+    "-C",
+    "link-arg=--nmagic",
+    "-C",
+    "link-arg=-Tlink.x",
+    "-C",
+    "link-arg=-Tdefmt.x",
+    "-C",
+    "no-vectorize-loops",
 ]
 
 # Use picotool for loading.
 #
 # Load an elf, skipping unchanged flash sectors, verify it, and execute it
-runner = "${PICOTOOL_PATH} load -u -v -x -t elf"
-#runner = "probe-rs run --chip ${CHIP} --protocol swd"
+# runner = "${PICOTOOL_PATH} load -u -v -x -t elf"
+runner = "probe-rs run --chip rp2040 --protocol swd"
 
 # This is the hard-float ABI for Arm mode.
 #
@@ -59,10 +62,14 @@ runner = "${PICOTOOL_PATH} load -u -v -x -t elf"
 # * linker argument -Tdefmt.x also tells the linker to use `defmt.x` as a
 #   secondary linker script. This is required to make defmt_rtt work.
 rustflags = [
-    "-C", "link-arg=--nmagic",
-    "-C", "link-arg=-Tlink.x",
-    "-C", "link-arg=-Tdefmt.x",
-    "-C", "target-cpu=cortex-m33",
+    "-C",
+    "link-arg=--nmagic",
+    "-C",
+    "link-arg=-Tlink.x",
+    "-C",
+    "link-arg=-Tdefmt.x",
+    "-C",
+    "target-cpu=cortex-m33",
 ]
 
 # Use picotool for loading.
@@ -87,9 +94,12 @@ runner = "${PICOTOOL_PATH} load -u -v -x -t elf"
 # * linker argument -Tdefmt.x also tells the linker to use `defmt.x` as a
 #   secondary linker script. This is required to make defmt_rtt work.
 rustflags = [
-    "-C", "link-arg=--nmagic",
-    "-C", "link-arg=-Trp2350_riscv.x",
-    "-C", "link-arg=-Tdefmt.x",
+    "-C",
+    "link-arg=--nmagic",
+    "-C",
+    "link-arg=-Trp2350_riscv.x",
+    "-C",
+    "link-arg=-Tdefmt.x",
 ]
 
 # Use picotool for loading.
@@ -100,3 +110,7 @@ runner = "${PICOTOOL_PATH} load -u -v -x -t elf"
 
 [env]
 DEFMT_LOG = "debug"
+
+# For mousefood
+[unstable]
+build-std = ["alloc", "core"]

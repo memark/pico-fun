@@ -1,20 +1,11 @@
-//! SPDX-License-Identifier: MIT OR Apache-2.0
-//!
-//! Copyright (c) 2021–2024 The rp-rs Developers
-//! Copyright (c) 2021 rp-rs organization
-//! Copyright (c) 2025 Raspberry Pi Ltd.
-//!
-//! # GPIO 'Blinky' Example
-//!
-//! This application demonstrates how to control a GPIO pin on the rp2040 and rp235x.
-//!
-//! It may need to be adapted to your particular board layout and/or pin assignment.
-
 #![no_std]
 #![no_main]
+//
 #![allow(unused, clippy::empty_loop)]
 
-use defmt::*;
+use cortex_m::delay::Delay;
+use cortex_m::prelude::*;
+use defmt::{debug, info};
 use defmt_rtt as _;
 use embedded_graphics::{
     mono_font::{MonoTextStyleBuilder, ascii::FONT_10X20},
@@ -24,91 +15,93 @@ use embedded_graphics::{
 };
 use embedded_hal::delay::DelayNs;
 use embedded_hal::digital::OutputPin;
-
-#[cfg(target_arch = "riscv32")]
-use panic_halt as _;
-#[cfg(target_arch = "arm")]
-use panic_probe as _;
-
-// Alias for our HAL crate
+use embedded_hal::pwm::SetDutyCycle;
 use hal::entry;
-
+use heapless::String;
+use panic_probe as _;
 use pimoroni_pico_explorer::{
     PicoExplorer,
     hal::{Adc, Sio},
 };
-#[cfg(rp2350)]
-use rp235x_hal as hal;
+use rp2040_hal::{
+    self as hal, Watchdog,
+    clocks::{ClockSource, init_clocks_and_plls},
+    gpio::{FunctionPwm, FunctionSio, Pin, PullDown, bank0::Gpio0},
+    multicore::{Multicore, Stack},
+    pac::{self, CorePeripherals, Peripherals},
+    pwm::{self, InputHighRunning, Slices},
+};
+// use rtt_target::{rprintln, rtt_init_print};
 
-#[cfg(rp2040)]
-use rp2040_hal as hal;
-use rp2040_hal::{clocks::ClockSource, pac};
-
-// use arrayvec::ArrayString;
-
-// use bsp::entry;
-// use bsp::hal;
-// use rp_pico as bsp;
-
-/// The linker will place this boot block at the start of our program image. We
-/// need this to help the ROM bootloader get our code up and running.
-/// Note: This boot block is not necessary when using a rp-hal based BSP
-/// as the BSPs already perform this step.
 #[unsafe(link_section = ".boot2")]
 #[used]
-#[cfg(rp2040)]
 pub static BOOT2: [u8; 256] = rp2040_boot2::BOOT_LOADER_W25Q080;
 
-/// Tell the Boot ROM about our application
-#[unsafe(link_section = ".start_block")]
-#[used]
-#[cfg(rp2350)]
-pub static IMAGE_DEF: hal::block::ImageDef = hal::block::ImageDef::secure_exe();
+const XTAL_FREQ_HZ: u32 = 12_000_000_u32;
 
-/// External high-speed crystal on the Raspberry Pi Pico 2 board is 12 MHz.
-/// Adjust if your board has a different frequency
-const XTAL_FREQ_HZ: u32 = 12_000_000u32;
+static mut CORE1_STACK: Stack<4096> = Stack::new();
 
-/// Entry point to our bare-metal application.
-///
-/// The `#[hal::entry]` macro ensures the Cortex-M start-up code calls this function
-/// as soon as all global variables and the spinlock are initialised.
-///
-/// The function configures the rp2040 and rp235x peripherals, then toggles a GPIO pin in
-/// an infinite loop. If there is an LED connected to that pin, it will blink.
+fn core1_task() {
+    loop {}
+}
+
 #[entry]
 fn main() -> ! {
-    info!("Program start");
+    // rtt_init_print!();
+    // rprintln!("Hello from RTT");
 
-    // let mut p = hal::pac::Peripherals::take().unwrap();
-    let mut p = pac::Peripherals::take().unwrap();
-    let cp = pac::CorePeripherals::take().unwrap();
+    info!("Application started");
 
-    let mut watchdog = hal::Watchdog::new(p.WATCHDOG);
-    let clocks = hal::clocks::init_clocks_and_plls(
+    let mut pac = Peripherals::take().unwrap();
+    let core0 = CorePeripherals::take().unwrap();
+    let mut sio = Sio::new(pac.SIO);
+
+    let mut watchdog = Watchdog::new(pac.WATCHDOG);
+    let clocks = init_clocks_and_plls(
         XTAL_FREQ_HZ,
-        p.XOSC,
-        p.CLOCKS,
-        p.PLL_SYS,
-        p.PLL_USB,
-        &mut p.RESETS,
+        pac.XOSC,
+        pac.CLOCKS,
+        pac.PLL_SYS,
+        pac.PLL_USB,
+        &mut pac.RESETS,
         &mut watchdog,
     )
     .unwrap();
 
-    let mut delay = cortex_m::delay::Delay::new(cp.SYST, clocks.system_clock.get_freq().to_Hz());
-    let mut adc = Adc::new(p.ADC, &mut p.RESETS);
-    let sio = Sio::new(p.SIO);
+    let hz = clocks.system_clock.get_freq().to_Hz();
+
+    let mut delay = Delay::new(core0.SYST, hz);
+    let mut adc = Adc::new(pac.ADC, &mut pac.RESETS);
 
     let (mut explorer, pins) = PicoExplorer::new(
-        p.IO_BANK0,
-        p.PADS_BANK0,
+        pac.IO_BANK0,
+        pac.PADS_BANK0,
         sio.gpio_bank0,
-        p.SPI0,
+        pac.SPI0,
         adc,
-        &mut p.RESETS,
+        &mut pac.RESETS,
         &mut delay,
     );
+
+    //
+
+    let mut mc = Multicore::new(&mut pac.PSM, &mut pac.PPB, &mut sio.fifo);
+    let cores = mc.cores();
+    let core1 = &mut cores[1];
+    #[allow(static_mut_refs)]
+    let _test = core1.spawn(unsafe { &mut CORE1_STACK.mem }, move || {
+        let mut core1 = unsafe { pac::CorePeripherals::steal() };
+        // let mut delay1 = Delay::new(core1.SYST, system_freq_hz);
+
+        let mut delay1 = Delay::new(core1.SYST, hz);
+
+        delay1.delay_us(500);
+
+        loop {
+            debug!("From Core 1.");
+            delay1.delay_ms(500);
+        }
+    });
 
     // #[cfg(rp2040)]
     // let mut timer = hal::Timer::new(pac.TIMER, &mut pac.RESETS, &clocks);
@@ -133,22 +126,16 @@ fn main() -> ! {
     // loop {
     //     led_pin_0.set_high().unwrap();
     //     timer.delay_ms(200);
-
     //     led_pin_1.set_high().unwrap();
     //     timer.delay_ms(200);
-
     //     led_pin_3.set_low().unwrap();
     //     timer.delay_ms(200);
-
     //     led_pin_2.set_high().unwrap();
     //     timer.delay_ms(200);
-
     //     led_pin_1.set_low().unwrap();
     //     timer.delay_ms(200);
-
     //     led_pin_3.set_high().unwrap();
     //     timer.delay_ms(200);
-
     //     led_pin_2.set_low().unwrap();
     //     timer.delay_ms(200);
     // }
@@ -164,15 +151,138 @@ fn main() -> ! {
         .text_color(Rgb565::GREEN)
         .background_color(Rgb565::BLACK)
         .build();
-    Text::with_alignment("Hello", Point::new(20, 30), style, Alignment::Left)
+    Text::with_alignment("Loading... 1", Point::new(20, 30), style, Alignment::Left)
         .draw(&mut explorer.screen)
         .unwrap();
-    Text::with_alignment("World", Point::new(20, 50), style, Alignment::Left)
+
+    //
+
+    if false {
+        let mut buzzer = pins.gpio4.into_push_pull_output();
+
+        // Rough ~1 kHz (500 µs high + 500 µs low)
+        loop {
+            buzzer.set_high();
+            delay.delay_us(500);
+            buzzer.set_low();
+            delay.delay_us(500);
+        }
+    } else {
+        let mut pwm_slices = pwm::Slices::new(pac.PWM, &mut pac.RESETS);
+        let pwm = &mut pwm_slices.pwm2;
+        pwm.enable();
+
+        // let freq_hz = 2000;
+        // let clk = 125_000_000;
+        // let top = clk / freq_hz;
+        // pwm0.set_top(top);
+
+        // 2 kHz: freq = clk_sys / (top + 1)
+        // with clk_sys = 125 MHz, top ≈ 62_499
+        // pwm0.set_top(62_499);
+        // pwm0.set_top(100_000);
+        // pwm0.enable();
+
+        let freq = 440;
+
+        let top = 125_000_000_u32 / freq / 250;
+        let top: u16 = top.try_into().unwrap();
+
+        let channel_a = &mut pwm.channel_a;
+        // let buzzer = pins.gpio0;
+        let buzzer = pins.gpio4;
+        channel_a.output_to(buzzer);
+
+        channel_a.set_duty(1100 / 8);
+
+        pwm.set_div_int(255);
+        pwm.set_div_frac(0);
+
+        Text::with_alignment("Loading... 2", Point::new(20, 50), style, Alignment::Left)
+            .draw(&mut explorer.screen)
+            .unwrap();
+
+        loop {
+            debug!("From Core 0.");
+            delay.delay_ms(500);
+        }
+
+        loop {
+            // pwm0.set_top(top);
+            // delay.delay_ms(500);
+
+            // pwm0.set_top(top / 2);
+            // delay.delay_ms(500);
+
+            pwm.set_top(1100);
+            delay.delay_ms(500);
+
+            pwm.set_top(554);
+            delay.delay_ms(500);
+        }
+    }
+
+    // // let mut pin_0 = pins.gpio0.into_push_pull_output();
+    // let buzzer_pin = pins.gpio0.into_function::<FunctionPwm>();
+
+    // let pwm_slices = Slices::new(p.PWM, &mut p.RESETS);
+
+    // // let mut pwm = pwm_slices.pwm0;
+    // // pwm.set_ph_correct();
+    // // pwm.enable();
+
+    // // let pwm = pwm.into_mode::<InputHighRunning>();
+
+    // // // Channel A for even gpio pin outputs
+    // // let mut channel_a = pwm.channel_a;
+    // // let channel_pin_a = channel_a.output_to(pins.gpio0);
+
+    // // channel_a.set_duty_cycle(0x00ff);
+    // // let max_duty_cycle = channel_a.max_duty_cycle();
+    // // channel_a.set_inverted(); // Invert the output
+    // // channel_a.clr_inverted(); // Don't invert the output
+
+    // let mut pwm = pwm_slices.pwm0;
+    // pwm.set_ph_correct(); // optional but nicer for audio
+    // pwm.enable();
+
+    // let mut ch = &mut pwm.channel_a;
+    // ch.output_to(buzzer_pin);
+
+    // // let freq_hz = 440;
+    // // let clk = 125_000_000_u32; // clk_sys
+    // // let top = clk / freq_hz;
+    // // pwm.set_top(top as u16);
+
+    // pwm.set_top(25000);
+
+    //
+
+    Text::with_alignment("...done!", Point::new(20, 50), style, Alignment::Left)
         .draw(&mut explorer.screen)
         .unwrap();
 
     loop {}
 }
+
+// fn set_freq<P: rp_pico::hal::pwm::SliceId>(pwm: &mut pwm::PwmSlice<P>, freq_hz: u32) {
+//     let clk = 125_000_000; // clk_sys
+//     let top = clk / freq_hz;
+//     pwm.set_top(top);
+// }
+
+// class Buzzer:
+//     def __init__(self, pin):
+//         self.pwm = PWM(Pin(pin))
+
+//     def set_tone(self, freq, duty=0.5):
+//         if freq < 50.0:  # uh... https://github.com/micropython/micropython/blob/af64c2ddbd758ab6bac0fcca94c66d89046663be/ports/rp2/machine_pwm.c#L105-L119
+//             self.pwm.duty_u16(0)
+//             return False
+
+//         self.pwm.freq(freq)
+//         self.pwm.duty_u16(int(65535 * duty))
+//         return True
 
 #[unsafe(link_section = ".bi_entries")]
 #[used]
