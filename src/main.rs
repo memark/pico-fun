@@ -78,15 +78,6 @@ fn main() -> ! {
     unsafe {
         embedded_alloc::init!(HEAP, 100 * 1024);
     }
-    // unsafe {
-    //     HEAP.init(cortex_m_rt::heap_start() as usize, 10 * 1024);
-    // }
-    // {
-    //     use core::mem::MaybeUninit;
-    //     const HEAP_SIZE: usize = 1024;
-    //     static mut HEAP_MEM: [MaybeUninit<u8>; HEAP_SIZE] = [MaybeUninit::uninit(); HEAP_SIZE];
-    //     unsafe { HEAP.init(HEAP_MEM.as_ptr() as usize, HEAP_SIZE) }
-    // }
 
     info!("Application started");
 
@@ -190,14 +181,12 @@ fn main() -> ! {
     // let buf: &str = "Hello world!";
 
     // LCD pins (Pico Explorer)
-    let dc = pins.gpio4.into_push_pull_output();
+    let dc = pins.gpio16.into_push_pull_output();
     let cs = pins.gpio17.into_push_pull_output();
     let sck = pins.gpio18.into_function::<FunctionSpi>();
     let mosi = pins.gpio19.into_function::<FunctionSpi>();
-    let miso = pins.gpio16.into_function::<FunctionSpi>(); // dummy, not wired
-
-    // If you *don’t* have a real reset line, pick any spare pin as a dummy:
-    let rst = pins.gpio15.into_push_pull_output(); // not wired -> acts as "no reset"
+    let miso = pins.gpio4.into_function::<FunctionSpi>(); // dummy, not wired
+    let rst = pins.gpio20.into_push_pull_output(); // not wired -> acts as "no reset"
 
     // SPI0 in MODE_0 is what ST7789 expects
     let spi = Spi::<_, _, _>::new(pac.SPI0, (mosi, miso, sck)).init(
@@ -227,17 +216,31 @@ fn main() -> ! {
 
     debug!("display initialized");
 
-    let backend = EmbeddedBackend::new(&mut display, EmbeddedBackendConfig::default());
-    debug!("backend initialized");
+    // let backend = EmbeddedBackend::new(&mut display, EmbeddedBackendConfig::default());
+    // debug!("backend initialized");
 
-    let mut terminal = Terminal::new(backend).unwrap();
-    debug!("terminal initialized");
+    // let mut terminal = Terminal::new(backend).unwrap();
+    // debug!("terminal initialized");
 
     loop {
-        debug!("calling draw()...");
-        terminal.draw(draw).unwrap();
-        debug!("...done");
+        debug!("drawing...");
 
+        {
+            // terminal.draw(draw).unwrap();
+        }
+
+        {
+            let style = MonoTextStyleBuilder::new()
+                .font(&FONT_10X20)
+                .text_color(Rgb565::GREEN)
+                .background_color(Rgb565::BLACK)
+                .build();
+            Text::with_alignment("Hello", Point::new(20, 30), style, Alignment::Left)
+                .draw(&mut display)
+                .unwrap();
+        }
+
+        debug!("...done");
         delay_new.delay_ms(10);
     }
 
