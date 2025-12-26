@@ -4,12 +4,14 @@
 //
 #![allow(unused, clippy::empty_loop)]
 
-use cortex_m::delay::Delay;
-use cortex_m::prelude::*;
+mod dummy_pin;
+
+use crate::dummy_pin::DummyPin;
+use cortex_m::{self as _, delay::Delay, prelude::*};
 use cortex_m_rt::entry;
 use defmt::{debug, info};
 use defmt_rtt as _;
-// use display_interface_spi::{SPIInterface, SPIInterfaceNoCS};
+use embedded_alloc::LlffHeap as Heap;
 use embedded_graphics::{
     mono_font::{MonoTextStyleBuilder, ascii::FONT_10X20},
     pixelcolor::Rgb565,
@@ -17,56 +19,36 @@ use embedded_graphics::{
     text::{Alignment, Text},
 };
 use embedded_hal::delay::DelayNs;
-// use embedded_hal::digital::{OutputPin, v2::OutputPin};
-// use embedded_hal::pwm::SetDutyCycle;
-// use embedded_hal::{delay::DelayNs, spi::MODE_0};
-// use hal::entry;
+use embedded_hal_bus::spi::ExclusiveDevice;
 use heapless::String;
 use mipidsi::{Builder, interface::SpiInterface, models, options::ColorInversion};
 use mousefood::prelude::*;
 use mousefood::{EmbeddedBackendConfig, embedded_graphics::prelude::DrawTarget};
 use panic_probe as _;
-// use pimoroni_pico_explorer::{
-//     PicoExplorer,
-//     hal::{Adc, Sio},
-// };
 use ratatui::{
     Frame, Terminal,
     style::{Style, Stylize},
     widgets::{Block, Paragraph, Wrap},
 };
-use rp2040_hal::{
-    self as hal, Adc, Clock, Sio, Spi, Watchdog,
-    clocks::{ClockSource, init_clocks_and_plls},
-    fugit::RateExtU32,
-    gpio::{FunctionPwm, FunctionSio, FunctionSpi, Pin, Pins, PullDown, bank0::Gpio0},
-    multicore::{Multicore, Stack},
-    pac::{self, CorePeripherals, Peripherals},
-    pwm::{self, InputHighRunning, Slices},
+use rp_pico::{
+    Pins,
+    hal::{
+        Adc, Clock, Sio, Spi, Watchdog,
+        clocks::init_clocks_and_plls,
+        fugit::RateExtU32,
+        gpio::FunctionSpi,
+        multicore::{Multicore, Stack},
+        pwm::Slices,
+    },
+    pac::{CorePeripherals, Peripherals},
 };
-// use st7789::{Orientation, ST7789};
-use cortex_m as _;
-use embedded_hal_bus::spi::ExclusiveDevice;
-
-#[unsafe(link_section = ".boot2")]
-#[used]
-pub static BOOT2: [u8; 256] = rp2040_boot2::BOOT_LOADER_W25Q080;
 
 const XTAL_FREQ_HZ: u32 = 12_000_000_u32;
 
 static mut CORE1_STACK: Stack<4096> = Stack::new();
 
-// use embedded_alloc::Heap;
-
-use embedded_alloc::LlffHeap as Heap;
-
 #[global_allocator]
 static HEAP: Heap = Heap::empty();
-
-// #[alloc_error_handler]
-// fn oom(_: core::alloc::Layout) -> ! {
-//     loop {}
-// }
 
 fn core1_task() {
     loop {}
@@ -74,44 +56,37 @@ fn core1_task() {
 
 #[entry]
 fn main() -> ! {
-    // Initialize the allocator BEFORE you use it
     unsafe {
         embedded_alloc::init!(HEAP, 100 * 1024);
     }
 
     info!("Application started");
 
-    let mut pac = Peripherals::take().unwrap();
-    let core0 = CorePeripherals::take().unwrap();
-    let mut sio = Sio::new(pac.SIO);
+    let mut p = Peripherals::take().unwrap();
+    let cp = CorePeripherals::take().unwrap();
+    let mut sio = Sio::new(p.SIO);
 
-    let mut watchdog = Watchdog::new(pac.WATCHDOG);
+    // let mut mc = Multicore::new(&mut pac.PSM, &mut pac.PPB, &mut sio.fifo);
+    // let cores = mc.cores();
+    // let core1 = &mut cores[1];
+
+    let mut watchdog = Watchdog::new(p.WATCHDOG);
     let clocks = init_clocks_and_plls(
         XTAL_FREQ_HZ,
-        pac.XOSC,
-        pac.CLOCKS,
-        pac.PLL_SYS,
-        pac.PLL_USB,
-        &mut pac.RESETS,
+        p.XOSC,
+        p.CLOCKS,
+        p.PLL_SYS,
+        p.PLL_USB,
+        &mut p.RESETS,
         &mut watchdog,
     )
     .unwrap();
 
-    let hz = clocks.system_clock.get_freq().to_Hz();
+    let mut adc = Adc::new(p.ADC, &mut p.RESETS);
+    // let mut delay = Delay::new(core0.SYST, clocks.system_clock.freq().to_Hz());
+    let mut delay = Delay::new(cp.SYST, clocks.system_clock.freq().to_Hz());
 
-    let mut adc = Adc::new(pac.ADC, &mut pac.RESETS);
-    // let mut delay = Delay::new(core0.SYST, hz);
-    let mut delay_new = DelayCompat(cortex_m::delay::Delay::new(
-        core0.SYST,
-        clocks.system_clock.freq().to_Hz(),
-    ));
-
-    let pins = Pins::new(
-        pac.IO_BANK0,
-        pac.PADS_BANK0,
-        sio.gpio_bank0,
-        &mut pac.RESETS,
-    );
+    let pins = Pins::new(p.IO_BANK0, p.PADS_BANK0, sio.gpio_bank0, &mut p.RESETS);
 
     debug!("pins set up");
 
@@ -189,10 +164,10 @@ fn main() -> ! {
     let rst = pins.gpio20.into_push_pull_output(); // not wired -> acts as "no reset"
 
     // SPI0 in MODE_0 is what ST7789 expects
-    let spi = Spi::<_, _, _>::new(pac.SPI0, (mosi, miso, sck)).init(
-        &mut pac.RESETS,
+    let spi = Spi::<_, _, _>::new(p.SPI0, (mosi, miso, sck)).init(
+        &mut p.RESETS,
         clocks.peripheral_clock.freq(),
-        32_000_000u32.Hz(),
+        32.MHz(),
         embedded_hal::spi::MODE_0,
     );
 
@@ -204,14 +179,14 @@ fn main() -> ! {
     let buffer = unsafe { &mut BUF };
 
     // let spi = Spi::new(Bus::Spi0, SlaveSelect::Ss1, 60_000_000_u32, Mode::Mode0).unwrap();
-    let spi_device = ExclusiveDevice::new_no_delay(spi, NoCs).unwrap();
+    let spi_device = ExclusiveDevice::new_no_delay(spi, DummyPin).unwrap();
     // let mut buffer = [0_u8; 512];
     let di = SpiInterface::new(spi_device, dc, buffer);
     // let mut delay = Delay::new();
     let mut display = Builder::new(models::ST7789, di)
         .display_size(240, 240)
         .invert_colors(ColorInversion::Inverted)
-        .init(&mut delay_new)
+        .init(&mut delay)
         .unwrap();
 
     debug!("display initialized");
@@ -241,7 +216,7 @@ fn main() -> ! {
         }
 
         debug!("...done");
-        delay_new.delay_ms(10);
+        delay.delay_ms(10);
     }
 
     //
@@ -257,7 +232,7 @@ fn main() -> ! {
             // delay.delay_us(500);
         }
     } else {
-        let mut pwm_slices = pwm::Slices::new(pac.PWM, &mut pac.RESETS);
+        let mut pwm_slices = Slices::new(p.PWM, &mut p.RESETS);
         let pwm = &mut pwm_slices.pwm2;
         pwm.enable();
 
@@ -341,41 +316,3 @@ pub static PICOTOOL_ENTRIES: [rp_binary_info::EntryAddr; 5] = [
     rp_binary_info::rp_cargo_homepage_url!(),
     rp_binary_info::rp_program_build_attribute!(),
 ];
-
-/// Noop `OutputPin` implementation.
-///
-/// This is passed to `ExclusiveDevice`, because the CS pin is handle in
-/// hardware.
-struct NoCs;
-
-impl embedded_hal::digital::OutputPin for NoCs {
-    fn set_low(&mut self) -> Result<(), Self::Error> {
-        Ok(())
-    }
-
-    fn set_high(&mut self) -> Result<(), Self::Error> {
-        Ok(())
-    }
-}
-
-impl embedded_hal::digital::ErrorType for NoCs {
-    type Error = core::convert::Infallible;
-}
-
-/// Wrapper around `Delay` to implement the embedded-hal 1.0 delay.
-///
-/// This can be removed when a new version of the `cortex_m` crate is released.
-struct DelayCompat(cortex_m::delay::Delay);
-
-impl embedded_hal::delay::DelayNs for DelayCompat {
-    fn delay_ns(&mut self, mut ns: u32) {
-        while ns > 1000 {
-            self.0.delay_us(1);
-            ns = ns.saturating_sub(1000);
-        }
-    }
-
-    fn delay_us(&mut self, us: u32) {
-        self.0.delay_us(us);
-    }
-}
