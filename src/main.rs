@@ -22,15 +22,11 @@ use embedded_graphics::{
 use embedded_hal::{delay::DelayNs, spi::MODE_0};
 // use embedded_hal_bus::spi::ExclusiveDevice;
 use heapless::String;
+use mousefood::{EmbeddedBackend, EmbeddedBackendConfig};
 // use mipidsi::{Builder, interface::SpiInterface, models, options::ColorInversion};
 // use mousefood::prelude::*;
 // use mousefood::{EmbeddedBackendConfig, embedded_graphics::prelude::DrawTarget};
 use panic_probe as _;
-// use ratatui::{
-//     Frame, Terminal,
-//     style::{Style, Stylize},
-//     widgets::{Block, Paragraph, Wrap},
-// };
 use rp_pico::{
     Pins,
     hal::{
@@ -103,11 +99,11 @@ fn main() -> ! {
     let spii_screen = SPIInterface::new(spi_screen, dc, cs);
 
     let mut screen = ST7789::new(spii_screen, Some(DummyPin), Some(DummyPin), 240, 240);
-
     screen.init(&mut delay).unwrap();
     screen
         .set_orientation(st7789::Orientation::Portrait)
         .unwrap();
+    screen.clear(Rgb565::BLACK);
 
     // let dc = pins.gpio16.into_push_pull_output();
     // let cs = pins.gpio17.into_push_pull_output();
@@ -144,47 +140,51 @@ fn main() -> ! {
 
     // debug!("display initialized");
 
-    // let backend = EmbeddedBackend::new(&mut display, EmbeddedBackendConfig::default());
-    // debug!("backend initialized");
-
-    // let mut terminal = Terminal::new(backend).unwrap();
-    // debug!("terminal initialized");
-
-    // screen.clear(Rgb565::BLACK);
-
-    debug!("drawing...");
-
     {
-        // terminal.draw(draw).unwrap();
+        use ratatui::{
+            Frame, Terminal,
+            style::{Style, Stylize as _},
+            widgets::{Block, Paragraph, Wrap},
+        };
+
+        let backend = EmbeddedBackend::new(&mut screen, EmbeddedBackendConfig::default());
+        debug!("backend initialized");
+
+        let mut terminal = Terminal::new(backend).unwrap();
+        debug!("terminal initialized");
+
+        fn draw(frame: &mut Frame) {
+            let text = "Ratatui on embedded devices!";
+            let paragraph = Paragraph::new(text.dark_gray()).wrap(Wrap { trim: true });
+            let bordered_block = Block::bordered()
+                .border_style(Style::new().yellow())
+                .title("Mousefood");
+            frame.render_widget(paragraph.block(bordered_block), frame.area());
+        }
+
+        debug!("drawing...");
+
+        terminal.draw(draw).unwrap();
     }
 
     {
-        let style = MonoTextStyleBuilder::new()
-            .font(&FONT_10X20)
-            .text_color(Rgb565::GREEN)
-            .background_color(Rgb565::BLACK)
-            .build();
-        Text::with_alignment("Hello", Point::new(20, 30), style, Alignment::Left)
-            .draw(&mut screen)
-            .unwrap();
-        Text::with_alignment("World", Point::new(20, 50), style, Alignment::Left)
-            .draw(&mut screen)
-            .unwrap();
+        // let style = MonoTextStyleBuilder::new()
+        //     .font(&FONT_10X20)
+        //     .text_color(Rgb565::GREEN)
+        //     .background_color(Rgb565::BLACK)
+        //     .build();
+        // Text::with_alignment("Hello", Point::new(20, 30), style, Alignment::Left)
+        //     .draw(&mut screen)
+        //     .unwrap();
+        // Text::with_alignment("World", Point::new(20, 50), style, Alignment::Left)
+        //     .draw(&mut screen)
+        //     .unwrap();
     }
 
     debug!("...done");
 
     loop {}
 }
-
-// fn draw(frame: &mut Frame) {
-//     let text = "Ratatui on embedded devices!";
-//     let paragraph = Paragraph::new(text.dark_gray()).wrap(Wrap { trim: true });
-//     let bordered_block = Block::bordered()
-//         .border_style(Style::new().yellow())
-//         .title("Mousefood");
-//     frame.render_widget(paragraph.block(bordered_block), frame.area());
-// }
 
 #[unsafe(link_section = ".bi_entries")]
 #[used]
