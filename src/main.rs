@@ -20,10 +20,9 @@ use embedded_graphics::{
     text::{Alignment, Text},
 };
 use embedded_hal::{delay::DelayNs, spi::MODE_0};
-// use embedded_hal_bus::spi::ExclusiveDevice;
+use embedded_hal_bus::spi::ExclusiveDevice;
 use heapless::{String, Vec};
 use mousefood::{EmbeddedBackend, EmbeddedBackendConfig};
-// use mipidsi::{Builder, interface::SpiInterface, models, options::ColorInversion};
 use panic_probe as _;
 use ratatui::widgets::Borders;
 use rp_pico::{
@@ -86,7 +85,7 @@ fn main() -> ! {
 
     let spi_sclk = pins.gpio18.reconfigure::<FunctionSpi, PullNone>();
     let spi_mosi = pins.gpio19.reconfigure::<FunctionSpi, PullNone>();
-    let spi_screen = Spi::<_, _, _, 8>::new(p.SPI0, (spi_mosi, spi_sclk)).init(
+    let spi_bus = Spi::<_, _, _, 8>::new(p.SPI0, (spi_mosi, spi_sclk)).init(
         &mut p.RESETS,
         125u32.MHz(),
         16u32.MHz(),
@@ -95,20 +94,48 @@ fn main() -> ! {
 
     let dc = pins.gpio16.reconfigure::<FunctionSioOutput, PullNone>();
     let cs = pins.gpio17.reconfigure::<FunctionSioOutput, PullNone>();
-    let spii_screen = SPIInterface::new(spi_screen, dc, cs);
+    // let spii_screen = SPIInterface::new(spi_screen, dc, cs);
 
-    let mut screen = ST7789::new(spii_screen, None::<DummyPin>, None::<DummyPin>, 240, 240);
-    screen.init(&mut delay).unwrap();
-    screen
-        .set_orientation(st7789::Orientation::Portrait)
-        .unwrap();
-    screen.clear(Rgb565::BLACK);
+    // let mut screen = ST7789::new(spii_screen, None::<DummyPin>, None::<DummyPin>, 240, 240);
+    // screen.init(&mut delay).unwrap();
+    // screen
+    //     .set_orientation(st7789::Orientation::Portrait)
+    //     .unwrap();
+
+    let mut display = {
+        use mipidsi::{
+            Builder, Display,
+            interface::SpiInterface,
+            models::{self, Model},
+            options::{Orientation, RefreshOrder, Rotation},
+        };
+
+        let device = ExclusiveDevice::new_no_delay(spi_bus, cs).unwrap();
+
+        let buffer = {
+            static mut BUF: [u8; 1024] = [0; 1024];
+            #[allow(static_mut_refs)]
+            unsafe {
+                &mut BUF
+            }
+        };
+
+        let di = SpiInterface::new(device, dc, buffer);
+
+        Builder::new(models::ST7789, di)
+            .display_size(240, 240)
+            .orientation(Orientation::default().rotate(Rotation::Deg270))
+            .init(&mut delay)
+            .unwrap()
+    };
+
+    display.clear(Rgb565::BLACK).unwrap();
 
     {
         use heapless::Vec;
         use ratatui::{prelude::*, symbols::*, widgets::*};
 
-        let backend = EmbeddedBackend::new(&mut screen, EmbeddedBackendConfig::default());
+        let backend = EmbeddedBackend::new(&mut display, EmbeddedBackendConfig::default());
         debug!("backend initialized");
 
         let mut terminal = Terminal::new(backend).unwrap();
