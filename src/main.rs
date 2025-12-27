@@ -89,11 +89,8 @@ fn main() -> ! {
 
     let pins = Pins::new(p.IO_BANK0, p.PADS_BANK0, sio.gpio_bank0, &mut p.RESETS);
 
-    let dc = pins.gpio16.reconfigure::<FunctionSioOutput, PullNone>();
-    let cs = pins.gpio17.reconfigure::<FunctionSioOutput, PullNone>();
     let spi_sclk = pins.gpio18.reconfigure::<FunctionSpi, PullNone>();
     let spi_mosi = pins.gpio19.reconfigure::<FunctionSpi, PullNone>();
-
     let spi_screen = Spi::<_, _, _, 8>::new(p.SPI0, (spi_mosi, spi_sclk)).init(
         &mut p.RESETS,
         125u32.MHz(),
@@ -101,6 +98,8 @@ fn main() -> ! {
         MODE_0,
     );
 
+    let dc = pins.gpio16.reconfigure::<FunctionSioOutput, PullNone>();
+    let cs = pins.gpio17.reconfigure::<FunctionSioOutput, PullNone>();
     let spii_screen = SPIInterface::new(spi_screen, dc, cs);
 
     let mut screen = ST7789::new(spii_screen, Some(DummyPin), Some(DummyPin), 240, 240);
