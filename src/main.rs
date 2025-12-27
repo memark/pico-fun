@@ -21,15 +21,16 @@ use embedded_graphics::{
 use embedded_hal::delay::DelayNs;
 use embedded_hal_bus::spi::ExclusiveDevice;
 use heapless::String;
-use mipidsi::{Builder, interface::SpiInterface, models, options::ColorInversion};
-use mousefood::prelude::*;
-use mousefood::{EmbeddedBackendConfig, embedded_graphics::prelude::DrawTarget};
+// use mipidsi::{Builder, interface::SpiInterface, models, options::ColorInversion};
+// use mousefood::prelude::*;
+// use mousefood::{EmbeddedBackendConfig, embedded_graphics::prelude::DrawTarget};
 use panic_probe as _;
-use ratatui::{
-    Frame, Terminal,
-    style::{Style, Stylize},
-    widgets::{Block, Paragraph, Wrap},
-};
+use pimoroni_pico_explorer::PicoExplorer;
+// use ratatui::{
+//     Frame, Terminal,
+//     style::{Style, Stylize},
+//     widgets::{Block, Paragraph, Wrap},
+// };
 use rp_pico::{
     Pins,
     hal::{
@@ -86,7 +87,7 @@ fn main() -> ! {
     // let mut delay = Delay::new(core0.SYST, clocks.system_clock.freq().to_Hz());
     let mut delay = Delay::new(cp.SYST, clocks.system_clock.freq().to_Hz());
 
-    let pins = Pins::new(p.IO_BANK0, p.PADS_BANK0, sio.gpio_bank0, &mut p.RESETS);
+    // let pins = Pins::new(p.IO_BANK0, p.PADS_BANK0, sio.gpio_bank0, &mut p.RESETS);
 
     debug!("pins set up");
 
@@ -155,41 +156,51 @@ fn main() -> ! {
 
     // let buf: &str = "Hello world!";
 
-    // LCD pins (Pico Explorer)
-    let dc = pins.gpio16.into_push_pull_output();
-    let cs = pins.gpio17.into_push_pull_output();
-    let sck = pins.gpio18.into_function::<FunctionSpi>();
-    let mosi = pins.gpio19.into_function::<FunctionSpi>();
-    let miso = pins.gpio4.into_function::<FunctionSpi>(); // dummy, not wired
-    let rst = pins.gpio20.into_push_pull_output(); // not wired -> acts as "no reset"
-
-    // SPI0 in MODE_0 is what ST7789 expects
-    let spi = Spi::<_, _, _>::new(p.SPI0, (mosi, miso, sck)).init(
+    let (mut explorer, pins) = PicoExplorer::new(
+        p.IO_BANK0,
+        p.PADS_BANK0,
+        sio.gpio_bank0,
+        p.SPI0,
+        adc,
         &mut p.RESETS,
-        clocks.peripheral_clock.freq(),
-        32.MHz(),
-        embedded_hal::spi::MODE_0,
+        &mut delay,
     );
 
-    debug!("spi initialized");
+    // // LCD pins (Pico Explorer)
+    // let dc = pins.gpio16.into_push_pull_output();
+    // let cs = pins.gpio17.into_push_pull_output();
+    // let sck = pins.gpio18.into_function::<FunctionSpi>();
+    // let mosi = pins.gpio19.into_function::<FunctionSpi>();
+    // let miso = pins.gpio4.into_function::<FunctionSpi>(); // dummy, not wired
+    // let rst = pins.gpio20.into_push_pull_output(); // not wired -> acts as "no reset"
 
-    static mut BUF: [u8; 1024] = [0; 1024];
+    // // SPI0 in MODE_0 is what ST7789 expects
+    // let spi = Spi::<_, _, _>::new(p.SPI0, (mosi, miso, sck)).init(
+    //     &mut p.RESETS,
+    //     clocks.peripheral_clock.freq(),
+    //     32.MHz(),
+    //     embedded_hal::spi::MODE_0,
+    // );
 
-    #[allow(static_mut_refs)]
-    let buffer = unsafe { &mut BUF };
+    // debug!("spi initialized");
 
-    // let spi = Spi::new(Bus::Spi0, SlaveSelect::Ss1, 60_000_000_u32, Mode::Mode0).unwrap();
-    let spi_device = ExclusiveDevice::new_no_delay(spi, DummyPin).unwrap();
-    // let mut buffer = [0_u8; 512];
-    let di = SpiInterface::new(spi_device, dc, buffer);
-    // let mut delay = Delay::new();
-    let mut display = Builder::new(models::ST7789, di)
-        .display_size(240, 240)
-        .invert_colors(ColorInversion::Inverted)
-        .init(&mut delay)
-        .unwrap();
+    // static mut BUF: [u8; 1024] = [0; 1024];
 
-    debug!("display initialized");
+    // #[allow(static_mut_refs)]
+    // let buffer = unsafe { &mut BUF };
+
+    // // let spi = Spi::new(Bus::Spi0, SlaveSelect::Ss1, 60_000_000_u32, Mode::Mode0).unwrap();
+    // let spi_device = ExclusiveDevice::new_no_delay(spi, DummyPin).unwrap();
+    // // let mut buffer = [0_u8; 512];
+    // let di = SpiInterface::new(spi_device, dc, buffer);
+    // // let mut delay = Delay::new();
+    // let mut display = Builder::new(models::ST7789, di)
+    //     .display_size(240, 240)
+    //     .invert_colors(ColorInversion::Inverted)
+    //     .init(&mut delay)
+    //     .unwrap();
+
+    // debug!("display initialized");
 
     // let backend = EmbeddedBackend::new(&mut display, EmbeddedBackendConfig::default());
     // debug!("backend initialized");
@@ -211,7 +222,7 @@ fn main() -> ! {
                 .background_color(Rgb565::BLACK)
                 .build();
             Text::with_alignment("Hello", Point::new(20, 30), style, Alignment::Left)
-                .draw(&mut display)
+                .draw(&mut explorer.screen)
                 .unwrap();
         }
 
@@ -279,14 +290,14 @@ fn main() -> ! {
     loop {}
 }
 
-fn draw(frame: &mut Frame) {
-    let text = "Ratatui on embedded devices!";
-    let paragraph = Paragraph::new(text.dark_gray()).wrap(Wrap { trim: true });
-    let bordered_block = Block::bordered()
-        .border_style(Style::new().yellow())
-        .title("Mousefood");
-    frame.render_widget(paragraph.block(bordered_block), frame.area());
-}
+// fn draw(frame: &mut Frame) {
+//     let text = "Ratatui on embedded devices!";
+//     let paragraph = Paragraph::new(text.dark_gray()).wrap(Wrap { trim: true });
+//     let bordered_block = Block::bordered()
+//         .border_style(Style::new().yellow())
+//         .title("Mousefood");
+//     frame.render_widget(paragraph.block(bordered_block), frame.area());
+// }
 
 // fn set_freq<P: rp_pico::hal::pwm::SliceId>(pwm: &mut pwm::PwmSlice<P>, freq_hz: u32) {
 //     let clk = 125_000_000; // clk_sys
