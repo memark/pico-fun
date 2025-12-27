@@ -103,7 +103,7 @@ fn main() -> ! {
 
     let spii_screen = SPIInterface::new(spi_screen, dc, cs);
 
-    let mut screen = ST7789::new(spii_screen, DummyPin, 240, 240);
+    let mut screen = ST7789::new(spii_screen, Some(DummyPin), Some(DummyPin), 240, 240);
 
     screen.init(&mut delay).unwrap();
     screen

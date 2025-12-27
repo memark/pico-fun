@@ -15,6 +15,7 @@ defmt = "1"
 defmt-rtt = "1"
 embedded-alloc = { git = "https://github.com/rust-embedded/embedded-alloc" }
 embedded-graphics = "0.7"
+embedded-graphics-core = "0.3.3"
 embedded-hal = "1.0.0"
 embedded-hal-02 = { version = "0.2.0", package = "embedded-hal" }
 # embedded-hal-bus = "0.3.0"
@@ -31,7 +32,7 @@ panic-probe = { version = "1", features = ["print-defmt"] }
 rp-binary-info = "0.1.1"
 rp-pico = "0.9"
 # rp2040-hal = { version = "0.10.2", features = ["rt", "critical-section-impl"] }
-st7789 = { version = "0.6", default-features = false, features = ["graphics"] }
+st7789 = { version = "0.7", default-features = false, features = ["graphics"] }
 display-interface-spi = "0.4.1"
 
 [patch.crates-io]
