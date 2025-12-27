@@ -19,7 +19,7 @@ use embedded_graphics::{
     text::{Alignment, Text},
 };
 use embedded_hal::delay::DelayNs;
-use embedded_hal_bus::spi::ExclusiveDevice;
+// use embedded_hal_bus::spi::ExclusiveDevice;
 use heapless::String;
 // use mipidsi::{Builder, interface::SpiInterface, models, options::ColorInversion};
 // use mousefood::prelude::*;
