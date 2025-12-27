@@ -168,6 +168,9 @@ fn main() -> ! {
         Text::with_alignment("Hello", Point::new(20, 30), style, Alignment::Left)
             .draw(&mut screen)
             .unwrap();
+        Text::with_alignment("World", Point::new(20, 50), style, Alignment::Left)
+            .draw(&mut screen)
+            .unwrap();
     }
 
     debug!("...done");
