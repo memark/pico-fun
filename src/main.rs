@@ -208,6 +208,8 @@ fn main() -> ! {
     // let mut terminal = Terminal::new(backend).unwrap();
     // debug!("terminal initialized");
 
+    explorer.screen.clear(Rgb565::BLACK);
+
     loop {
         debug!("drawing...");
 
