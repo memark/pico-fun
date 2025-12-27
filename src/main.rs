@@ -11,6 +11,7 @@ use cortex_m::{self as _, delay::Delay, prelude::*};
 use cortex_m_rt::entry;
 use defmt::{debug, info};
 use defmt_rtt as _;
+use display_interface_spi::SPIInterface;
 use embedded_alloc::LlffHeap as Heap;
 use embedded_graphics::{
     mono_font::{MonoTextStyleBuilder, ascii::FONT_10X20},
@@ -18,14 +19,14 @@ use embedded_graphics::{
     prelude::*,
     text::{Alignment, Text},
 };
-use embedded_hal::delay::DelayNs;
+use embedded_hal::{delay::DelayNs, spi::MODE_0};
 // use embedded_hal_bus::spi::ExclusiveDevice;
 use heapless::String;
 // use mipidsi::{Builder, interface::SpiInterface, models, options::ColorInversion};
 // use mousefood::prelude::*;
 // use mousefood::{EmbeddedBackendConfig, embedded_graphics::prelude::DrawTarget};
 use panic_probe as _;
-use pimoroni_pico_explorer::PicoExplorer;
+use pimoroni_pico_explorer::{PicoExplorer, Screen, all_pins};
 // use ratatui::{
 //     Frame, Terminal,
 //     style::{Style, Stylize},
@@ -43,6 +44,7 @@ use rp_pico::{
     },
     pac::{CorePeripherals, Peripherals},
 };
+use st7789::ST7789;
 
 const XTAL_FREQ_HZ: u32 = 12_000_000_u32;
 
@@ -156,15 +158,34 @@ fn main() -> ! {
 
     // let buf: &str = "Hello world!";
 
-    let (mut explorer, pins) = PicoExplorer::new(
-        p.IO_BANK0,
-        p.PADS_BANK0,
-        sio.gpio_bank0,
-        p.SPI0,
-        adc,
+    // let (mut explorer, pins) = PicoExplorer::new(
+    //     p.IO_BANK0,
+    //     p.PADS_BANK0,
+    //     sio.gpio_bank0,
+    //     p.SPI0,
+    //     adc,
+    //     &mut p.RESETS,
+    //     &mut delay,
+    // );
+
+    let internal_pins =
+        all_pins::Pins::new(p.IO_BANK0, p.PADS_BANK0, sio.gpio_bank0, &mut p.RESETS);
+
+    let dc = internal_pins.spi_miso.reconfigure();
+    let cs = internal_pins.lcd_cs.reconfigure();
+    let spi_sclk = internal_pins.spi_sclk.reconfigure();
+    let spi_mosi = internal_pins.spi_mosi.reconfigure();
+
+    let spi_screen = Spi::new(p.SPI0, (spi_mosi, spi_sclk)).init(
         &mut p.RESETS,
-        &mut delay,
+        125u32.MHz(),
+        16u32.MHz(),
+        MODE_0,
     );
+
+    let spii_screen = SPIInterface::new(spi_screen, dc, cs);
+
+    let mut screen: Screen = ST7789::new(spii_screen, pimoroni_pico_explorer::DummyPin, 240, 240);
 
     // // LCD pins (Pico Explorer)
     // let dc = pins.gpio16.into_push_pull_output();
@@ -208,7 +229,7 @@ fn main() -> ! {
     // let mut terminal = Terminal::new(backend).unwrap();
     // debug!("terminal initialized");
 
-    explorer.screen.clear(Rgb565::BLACK);
+    screen.clear(Rgb565::BLACK);
 
     loop {
         debug!("drawing...");
@@ -224,7 +245,7 @@ fn main() -> ! {
                 .background_color(Rgb565::BLACK)
                 .build();
             Text::with_alignment("Hello", Point::new(20, 30), style, Alignment::Left)
-                .draw(&mut explorer.screen)
+                .draw(&mut screen)
                 .unwrap();
         }
 
@@ -235,7 +256,7 @@ fn main() -> ! {
     //
 
     if false {
-        let mut buzzer = pins.gpio4.into_push_pull_output();
+        // let mut buzzer = pins.gpio4.into_push_pull_output();
 
         // Rough ~1 kHz (500 µs high + 500 µs low)
         loop {
@@ -267,8 +288,8 @@ fn main() -> ! {
 
         let channel_a = &mut pwm.channel_a;
         // let buzzer = pins.gpio0;
-        let buzzer = pins.gpio4;
-        channel_a.output_to(buzzer);
+        // let buzzer = pins.gpio4;
+        // channel_a.output_to(buzzer);
 
         channel_a.set_duty(1100 / 8);
 

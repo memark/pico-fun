@@ -31,7 +31,8 @@ pimoroni-pico-explorer = { version = "0.8.0", default-features = false }
 rp-binary-info = "0.1.1"
 rp-pico = "0.9"
 # rp2040-hal = { version = "0.10.2", features = ["rt", "critical-section-impl"] }
-# st7789 = { version = "0.7", default-features = false, features = ["graphics"] }
+st7789 = { version = "0.6", default-features = false, features = ["graphics"] }
+display-interface-spi = "0.4.1"
 
 [patch.crates-io]
 cortex-m = { git = "https://github.com/rust-embedded/cortex-m" }
