@@ -14,6 +14,7 @@ use defmt_rtt as _;
 use display_interface_spi::SPIInterface;
 use embedded_alloc::LlffHeap as Heap;
 use embedded_graphics::{
+    image::Image,
     mono_font::{
         MonoTextStyleBuilder,
         ascii::{FONT_6X10, FONT_10X20},
@@ -25,7 +26,7 @@ use embedded_graphics::{
 use embedded_hal::{delay::DelayNs, spi::MODE_0};
 use embedded_hal_bus::spi::ExclusiveDevice;
 use heapless::{String, Vec};
-use mousefood::{EmbeddedBackend, EmbeddedBackendConfig};
+use mousefood::{EmbeddedBackend, EmbeddedBackendConfig, prelude::Rgb888};
 use panic_probe as _;
 use ratatui::widgets::Borders;
 use rp_pico::{
@@ -44,7 +45,7 @@ use rp_pico::{
     },
     pac::{CorePeripherals, Peripherals, SPI0},
 };
-use tinytga::ParseError;
+use tinytga::{ParseError, Tga};
 
 const XTAL_FREQ_HZ: u32 = 12_000_000_u32;
 
@@ -275,40 +276,7 @@ fn main() -> ! {
         //
 
         if false {
-            use embedded_graphics::{image::Image, pixelcolor::Rgb888, prelude::*};
-            use tinytga::Tga;
-
-            fn log_parse_error(e: ParseError) {
-                match e {
-                    ParseError::ColorMap => defmt::error!("TGA - ParseError::ColorMap"),
-                    ParseError::Header => defmt::error!("TGA - ParseError::Header"),
-                    ParseError::Footer => defmt::error!("TGA - ParseError::Footer"),
-                    ParseError::UnsupportedImageType(_) => {
-                        defmt::error!("TGA - ParseError::UnsupportedImageType")
-                    }
-                    ParseError::UnsupportedBpp(_) => {
-                        defmt::error!("TGA - ParseError::UnsupportedBpp")
-                    }
-                    ParseError::MismatchedBpp(_) => {
-                        defmt::error!("TGA - ParseError::MismatchedBpp")
-                    }
-                    ParseError::UnsupportedTgaType(data_type, bpp) => {
-                        defmt::error!("TGA - ParseError::UnsupportedTgaType")
-                    }
-                    _ => todo!(),
-                }
-            }
-
-            //: Tga<Rgb888>
-            let tga = match Tga::from_slice(include_bytes!("../assets/rust-pride.tga")) {
-                Ok(x) => x,
-                Err(err) => {
-                    log_parse_error(err);
-
-                    panic!("{:?}", err);
-                }
-            };
-
+            let tga = load_tga();
             let image = Image::new(&tga, Point::zero());
             image.draw(&mut display).unwrap();
 
@@ -319,6 +287,40 @@ fn main() -> ! {
     }
 
     loop {}
+}
+
+fn load_tga() -> Tga<'static, BinaryColor> {
+    use embedded_graphics::{image::Image, pixelcolor::Rgb888, prelude::*};
+    use tinytga::Tga;
+
+    fn log_parse_error(e: ParseError) {
+        match e {
+            ParseError::ColorMap => defmt::error!("TGA - ParseError::ColorMap"),
+            ParseError::Header => defmt::error!("TGA - ParseError::Header"),
+            ParseError::Footer => defmt::error!("TGA - ParseError::Footer"),
+            ParseError::UnsupportedImageType(_) => {
+                defmt::error!("TGA - ParseError::UnsupportedImageType")
+            }
+            ParseError::UnsupportedBpp(_) => {
+                defmt::error!("TGA - ParseError::UnsupportedBpp")
+            }
+            ParseError::MismatchedBpp(_) => {
+                defmt::error!("TGA - ParseError::MismatchedBpp")
+            }
+            ParseError::UnsupportedTgaType(data_type, bpp) => {
+                defmt::error!("TGA - ParseError::UnsupportedTgaType")
+            }
+            _ => todo!(),
+        }
+    }
+
+    match Tga::from_slice(include_bytes!("../assets/rust-pride.tga")) {
+        Ok(x) => x,
+        Err(err) => {
+            log_parse_error(err);
+            panic!("{:?}", err);
+        }
+    }
 }
 
 #[unsafe(link_section = ".bi_entries")]
