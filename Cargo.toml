@@ -33,6 +33,7 @@ ratatui = { version = "0.30.0", default-features = false, features = [
 rp-binary-info = "0.1.1"
 rp-pico = "0.9"
 ssd1306 = "0.10.0"
+tinytga = "0.5.0"
 
 [patch.crates-io]
 cortex-m = { git = "https://github.com/rust-embedded/cortex-m" }

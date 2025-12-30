@@ -6,12 +6,10 @@
 
 mod dummy_pin;
 
-use core::cell::RefCell;
-
 use crate::dummy_pin::DummyPin;
 use cortex_m::{self as _, delay::Delay, prelude::*};
 use cortex_m_rt::entry;
-use defmt::{debug, info};
+use defmt::{debug, error, info};
 use defmt_rtt as _;
 use display_interface_spi::SPIInterface;
 use embedded_alloc::LlffHeap as Heap;
@@ -46,6 +44,7 @@ use rp_pico::{
     },
     pac::{CorePeripherals, Peripherals, SPI0},
 };
+use tinytga::ParseError;
 
 const XTAL_FREQ_HZ: u32 = 12_000_000_u32;
 
@@ -223,11 +222,11 @@ fn main() -> ! {
         use ssd1306::{I2CDisplayInterface, Ssd1306, prelude::*};
 
         let sda = pins
-            .gpio4
+            .gpio20
             .into_pull_up_input()
             .into_function::<FunctionI2C>();
         let scl = pins
-            .gpio5
+            .gpio21
             .into_pull_up_input()
             .into_function::<FunctionI2C>();
 
@@ -240,48 +239,83 @@ fn main() -> ! {
             clocks.system_clock.freq(),
         );
 
-        // let csd = CriticalSectionDevice::new(bus);
-        let rc = RefCell::new(i2c);
-        let rcd = RefCellDevice::new(&rc);
+        let interface = I2CDisplayInterface::new(i2c);
 
-        let interface = I2CDisplayInterface::new(rcd);
-
-        let mut display = Ssd1306::new(interface, DisplaySize128x32, DisplayRotation::Rotate0)
-            // .into_terminal_mode();
+        let mut display = Ssd1306::new(interface, DisplaySize128x32, DisplayRotation::Rotate180)
             .into_buffered_graphics_mode();
 
         display.init().unwrap();
-        // display.clear().unwrap();
+
+        display.clear(BinaryColor::Off);
+        display.flush().unwrap();
 
         debug!("display initialized");
 
-        debug!("drawing...");
+        {
+            debug!("drawing...");
 
-        // for c in 97..123 {
-        //     let cc = &[c];
-        //     let _ = display.write_str(unsafe { str::from_utf8_unchecked(cc) });
-        // }
-        // for c in 65..91 {
-        //     let cc = &[c];
-        //     let _ = display.write_str(unsafe { str::from_utf8_unchecked(cc) });
+            let text_style = MonoTextStyleBuilder::new()
+                .font(&FONT_6X10)
+                .text_color(BinaryColor::On)
+                .build();
 
-        let text_style = MonoTextStyleBuilder::new()
-            .font(&FONT_6X10)
-            .text_color(BinaryColor::On)
-            .build();
+            Text::with_baseline("Hello world!", Point::zero(), text_style, Baseline::Top)
+                .draw(&mut display)
+                .unwrap();
 
-        Text::with_baseline("Hello world!", Point::zero(), text_style, Baseline::Top)
-            .draw(&mut display)
-            .unwrap();
+            Text::with_baseline("Hello Rust!", Point::new(0, 16), text_style, Baseline::Top)
+                .draw(&mut display)
+                .unwrap();
 
-        Text::with_baseline("Hello Rust!", Point::new(0, 16), text_style, Baseline::Top)
-            .draw(&mut display)
-            .unwrap();
+            display.flush().unwrap();
 
-        display.flush().unwrap();
-        // }
+            debug!("...done");
+        }
 
-        debug!("...done");
+        //
+
+        if false {
+            use embedded_graphics::{image::Image, pixelcolor::Rgb888, prelude::*};
+            use tinytga::Tga;
+
+            fn log_parse_error(e: ParseError) {
+                match e {
+                    ParseError::ColorMap => defmt::error!("TGA - ParseError::ColorMap"),
+                    ParseError::Header => defmt::error!("TGA - ParseError::Header"),
+                    ParseError::Footer => defmt::error!("TGA - ParseError::Footer"),
+                    ParseError::UnsupportedImageType(_) => {
+                        defmt::error!("TGA - ParseError::UnsupportedImageType")
+                    }
+                    ParseError::UnsupportedBpp(_) => {
+                        defmt::error!("TGA - ParseError::UnsupportedBpp")
+                    }
+                    ParseError::MismatchedBpp(_) => {
+                        defmt::error!("TGA - ParseError::MismatchedBpp")
+                    }
+                    ParseError::UnsupportedTgaType(data_type, bpp) => {
+                        defmt::error!("TGA - ParseError::UnsupportedTgaType")
+                    }
+                    _ => todo!(),
+                }
+            }
+
+            //: Tga<Rgb888>
+            let tga = match Tga::from_slice(include_bytes!("../assets/rust-pride.tga")) {
+                Ok(x) => x,
+                Err(err) => {
+                    log_parse_error(err);
+
+                    panic!("{:?}", err);
+                }
+            };
+
+            let image = Image::new(&tga, Point::zero());
+            image.draw(&mut display).unwrap();
+
+            display.flush().unwrap();
+        }
+
+        loop {}
     }
 
     loop {}
