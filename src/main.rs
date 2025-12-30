@@ -41,7 +41,6 @@ use rp_pico::{
     },
     pac::{CorePeripherals, Peripherals, SPI0},
 };
-use st7789::ST7789;
 
 const XTAL_FREQ_HZ: u32 = 12_000_000_u32;
 
@@ -94,13 +93,6 @@ fn main() -> ! {
 
     let dc = pins.gpio16.reconfigure::<FunctionSioOutput, PullNone>();
     let cs = pins.gpio17.reconfigure::<FunctionSioOutput, PullNone>();
-    // let spii_screen = SPIInterface::new(spi_screen, dc, cs);
-
-    // let mut screen = ST7789::new(spii_screen, None::<DummyPin>, None::<DummyPin>, 240, 240);
-    // screen.init(&mut delay).unwrap();
-    // screen
-    //     .set_orientation(st7789::Orientation::Portrait)
-    //     .unwrap();
 
     let mut display = {
         use mipidsi::{
