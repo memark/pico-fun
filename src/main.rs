@@ -87,7 +87,7 @@ fn main() -> ! {
 
     let pins = Pins::new(p.IO_BANK0, p.PADS_BANK0, sio.gpio_bank0, &mut p.RESETS);
 
-    if false {
+    if true {
         let spi_sclk = pins.gpio18.reconfigure::<FunctionSpi, PullNone>();
         let spi_mosi = pins.gpio19.reconfigure::<FunctionSpi, PullNone>();
         let spi_bus = Spi::<_, _, _, 8>::new(p.SPI0, (spi_mosi, spi_sclk)).init(
@@ -127,9 +127,10 @@ fn main() -> ! {
                 .unwrap()
         };
 
-        display.clear(Rgb565::BLACK).unwrap();
+        // Colors are inverted...
+        display.clear(RgbColor::WHITE).unwrap();
 
-        {
+        if false {
             use heapless::Vec;
             use ratatui::{prelude::*, symbols::*, widgets::*};
 
@@ -143,15 +144,15 @@ fn main() -> ! {
 
             terminal
                 .draw(|frame| {
-                    // let text = "Ratatui on Raspberry Pi Pico!";
-                    // let paragraph = Paragraph::new(text.blue().bold())
-                    //     .wrap(Wrap { trim: true })
-                    //     .centered();
-                    // let bordered_block = Block::bordered()
-                    //     .padding(Padding::uniform(2))
-                    //     .border_style(Style::new().yellow().bold())
-                    //     .title("Mousefood");
-                    // frame.render_widget(paragraph.block(bordered_block), frame.area());
+                    let text = "Ratatui on Raspberry Pi Pico!";
+                    let paragraph = Paragraph::new(text.blue().bold())
+                        .wrap(Wrap { trim: true })
+                        .centered();
+                    let bordered_block = Block::bordered()
+                        .padding(Padding::uniform(2))
+                        .border_style(Style::new().yellow().bold())
+                        .title("Mousefood");
+                    frame.render_widget(paragraph.block(bordered_block), frame.area());
 
                     // let line_gauge = LineGauge::default()
                     //     .block(Block::bordered().title("Progress"))
@@ -159,61 +160,25 @@ fn main() -> ! {
                     //     .filled_symbol(symbols::line::THICK_HORIZONTAL)
                     //     .ratio(0.4);
                     // frame.render_widget(line_gauge, frame.area());
-
-                    let datasets = [
-                        Dataset::default()
-                            .name("Heavy")
-                            .marker(Marker::Dot)
-                            .graph_type(GraphType::Scatter)
-                            .style(Style::new().yellow())
-                            .data(&HEAVY_PAYLOAD_DATA),
-                        Dataset::default()
-                            .name("Medium".underlined())
-                            .marker(Marker::Braille)
-                            .graph_type(GraphType::Scatter)
-                            .style(Style::new().magenta())
-                            .data(&MEDIUM_PAYLOAD_DATA),
-                        Dataset::default()
-                            .name("Small")
-                            .marker(Marker::Dot)
-                            .graph_type(GraphType::Scatter)
-                            .style(Style::new().cyan())
-                            .data(&SMALL_PAYLOAD_DATA),
-                    ];
-
-                    let chart = Chart::new(datasets.to_vec())
-                        .block(
-                            Block::bordered().title(
-                                Line::from("Mousefood - Ratatui on Pi Pico RP2040")
-                                    .cyan()
-                                    .bold()
-                                    .centered(),
-                            ),
-                        )
-                        .x_axis(
-                            Axis::default()
-                                .title("Year")
-                                .bounds([1960., 2020.])
-                                .style(Style::default().fg(Color::Gray))
-                                .labels(["1960", "1990", "2020"]),
-                        )
-                        .y_axis(
-                            Axis::default()
-                                .title("Cost")
-                                .bounds([0., 75000.])
-                                .style(Style::default().fg(Color::Gray))
-                                .labels(["0", "37 500", "75 000"]),
-                        )
-                        .hidden_legend_constraints((
-                            Constraint::Ratio(1, 2),
-                            Constraint::Ratio(1, 2),
-                        ));
-
-                    frame.render_widget(chart, frame.area());
                 })
                 .unwrap();
 
             debug!("...done");
+        }
+
+        if true {
+            let tga = Tga::from_slice(include_bytes!("../assets/rust-pride.tga")).unwrap();
+            let image = Image::new(&tga, Point::zero());
+            // tga.bounding_box().resized(
+            //     Size::new(100, 100),
+            //     embedded_graphics::geometry::AnchorPoint::TopLeft,
+            // );
+
+            image.draw(&mut display).unwrap();
+            image
+                .translate(Point::new(100, 100))
+                .draw(&mut display)
+                .unwrap();
         }
     }
 
@@ -282,8 +247,6 @@ fn main() -> ! {
 
             display.flush().unwrap();
         }
-
-        loop {}
     }
 
     loop {}
