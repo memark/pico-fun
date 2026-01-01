@@ -182,7 +182,7 @@ fn main() -> ! {
         }
     }
 
-    {
+    if true {
         use core::fmt::Write;
         use embedded_hal_bus::i2c::*;
         use ssd1306::{I2CDisplayInterface, Ssd1306, prelude::*};
@@ -237,53 +237,77 @@ fn main() -> ! {
 
             debug!("...done");
         }
+    }
 
-        //
+    if true {
+        // use core::fmt::Write;
+        // use embedded_hal_bus::i2c::*;
+        // use ssd1306::{I2CDisplayInterface, Ssd1306, prelude::*};
+        use i2c_character_display::*;
 
-        if false {
-            let tga = load_tga();
-            let image = Image::new(&tga, Point::zero());
-            image.draw(&mut display).unwrap();
+        let sda = pins
+            .gpio6
+            .into_pull_up_input()
+            .into_function::<FunctionI2C>();
+        let scl = pins
+            .gpio7
+            .into_pull_up_input()
+            .into_function::<FunctionI2C>();
 
-            display.flush().unwrap();
-        }
+        let i2c = hal::I2C::i2c1(
+            p.I2C1,
+            sda,
+            scl,
+            400.kHz(),
+            &mut p.RESETS,
+            clocks.system_clock.freq(),
+        );
+
+        // It is recommended that the `i2c` object be wrapped in an `embedded_hal_bus::i2c::CriticalSectionDevice`
+        // so that it can be shared between multiple peripherals.
+
+        let mut lcd = CharacterDisplayPCF8574T::new(i2c, LcdDisplayType::Lcd16x2, delay);
+
+        // lcd.right_to_left();
+        defmt::unwrap!(lcd.init());
+        // lcd.right_to_left();
+
+        defmt::unwrap!((|| {
+            lcd.show_cursor(true)?
+                .blink_cursor(true)?
+                .backlight(true)?
+                .clear()?
+                .home()?
+                .autoscroll(false)?
+                .set_cursor(1, 1)?
+                // .set_cursor(2, 2)?
+                .print("Hello, ")?
+                .scroll_display_left()?
+                .scroll_display_left()?
+                .scroll_display_left()?
+                .print("LCD!")?
+                .scroll_display_right()?
+                .scroll_display_right()?
+                .scroll_display_right()?;
+
+            Ok::<_, CharacterDisplayError<_>>(())
+        })());
+
+        // defmt::unwrap!(lcd.show_cursor(true));
+        // defmt::unwrap!(lcd.blink_cursor(true));
+
+        // defmt::unwrap!(lcd.backlight(true));
+        // defmt::unwrap!(lcd.clear());
+        // defmt::unwrap!(lcd.home());
+
+        // defmt::unwrap!(lcd.print("Hello, LCD!"));
+
+        // // delay.delay_ms(1000);
+        // lcd.scroll_display_left();
+        // lcd.scroll_display_right();
     }
 
     loop {}
-}
-
-fn load_tga() -> Tga<'static, BinaryColor> {
-    use embedded_graphics::{image::Image, pixelcolor::Rgb888, prelude::*};
-    use tinytga::Tga;
-
-    fn log_parse_error(e: ParseError) {
-        match e {
-            ParseError::ColorMap => defmt::error!("TGA - ParseError::ColorMap"),
-            ParseError::Header => defmt::error!("TGA - ParseError::Header"),
-            ParseError::Footer => defmt::error!("TGA - ParseError::Footer"),
-            ParseError::UnsupportedImageType(_) => {
-                defmt::error!("TGA - ParseError::UnsupportedImageType")
-            }
-            ParseError::UnsupportedBpp(_) => {
-                defmt::error!("TGA - ParseError::UnsupportedBpp")
-            }
-            ParseError::MismatchedBpp(_) => {
-                defmt::error!("TGA - ParseError::MismatchedBpp")
-            }
-            ParseError::UnsupportedTgaType(data_type, bpp) => {
-                defmt::error!("TGA - ParseError::UnsupportedTgaType")
-            }
-            _ => todo!(),
-        }
-    }
-
-    match Tga::from_slice(include_bytes!("../assets/rust-pride.tga")) {
-        Ok(x) => x,
-        Err(err) => {
-            log_parse_error(err);
-            panic!("{:?}", err);
-        }
-    }
 }
 
 #[unsafe(link_section = ".bi_entries")]
