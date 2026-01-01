@@ -24,6 +24,7 @@ use embedded_graphics::{
     text::{Alignment, Baseline, Text},
 };
 use embedded_hal::{delay::DelayNs, spi::MODE_0};
+use embedded_hal_02::digital::v2::InputPin;
 use embedded_hal_bus::spi::ExclusiveDevice;
 use heapless::{String, Vec};
 use mousefood::{EmbeddedBackend, EmbeddedBackendConfig, prelude::Rgb888};
@@ -84,6 +85,7 @@ fn main() -> ! {
 
     let mut adc = Adc::new(p.ADC, &mut p.RESETS);
     let mut delay = Delay::new(cp.SYST, clocks.system_clock.freq().to_Hz());
+    let mut timer = hal::Timer::new(p.TIMER, &mut p.RESETS, &clocks);
 
     let pins = Pins::new(p.IO_BANK0, p.PADS_BANK0, sio.gpio_bank0, &mut p.RESETS);
 
@@ -263,48 +265,30 @@ fn main() -> ! {
             clocks.system_clock.freq(),
         );
 
-        // It is recommended that the `i2c` object be wrapped in an `embedded_hal_bus::i2c::CriticalSectionDevice`
-        // so that it can be shared between multiple peripherals.
-
         let mut lcd = CharacterDisplayPCF8574T::new(i2c, LcdDisplayType::Lcd16x2, delay);
 
-        // lcd.right_to_left();
-        defmt::unwrap!(lcd.init());
-        // lcd.right_to_left();
-
         defmt::unwrap!((|| {
-            lcd.show_cursor(true)?
-                .blink_cursor(true)?
-                .backlight(true)?
-                .clear()?
-                .home()?
-                .autoscroll(false)?
-                .set_cursor(1, 1)?
-                // .set_cursor(2, 2)?
-                .print("Hello, ")?
-                .scroll_display_left()?
-                .scroll_display_left()?
-                .scroll_display_left()?
-                .print("LCD!")?
-                .scroll_display_right()?
-                .scroll_display_right()?
-                .scroll_display_right()?;
+            lcd.init()?;
+            lcd.clear()?.home()?.print("Hello, LCD!")?;
 
             Ok::<_, CharacterDisplayError<_>>(())
         })());
 
-        // defmt::unwrap!(lcd.show_cursor(true));
-        // defmt::unwrap!(lcd.blink_cursor(true));
+        let a = pins.gpio12.into_pull_up_input();
+        let b = pins.gpio13.into_pull_up_input();
+        let x = pins.gpio14.into_pull_up_input();
+        let y = pins.gpio15.into_pull_up_input();
 
-        // defmt::unwrap!(lcd.backlight(true));
-        // defmt::unwrap!(lcd.clear());
-        // defmt::unwrap!(lcd.home());
-
-        // defmt::unwrap!(lcd.print("Hello, LCD!"));
-
-        // // delay.delay_ms(1000);
-        // lcd.scroll_display_left();
-        // lcd.scroll_display_right();
+        loop {
+            if b.is_low().unwrap() {
+                lcd.scroll_display_left();
+                DelayNs::delay_ms(&mut timer, 200);
+            }
+            if y.is_low().unwrap() {
+                lcd.scroll_display_right();
+                DelayNs::delay_ms(&mut timer, 200);
+            }
+        }
     }
 
     loop {}
