@@ -242,9 +242,6 @@ fn main() -> ! {
     }
 
     if true {
-        // use core::fmt::Write;
-        // use embedded_hal_bus::i2c::*;
-        // use ssd1306::{I2CDisplayInterface, Ssd1306, prelude::*};
         use i2c_character_display::*;
 
         let sda = pins
