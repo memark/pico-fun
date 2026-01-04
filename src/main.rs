@@ -1,6 +1,5 @@
 #![no_std]
 #![no_main]
-#![feature(alloc_error_handler)]
 //
 #![allow(unused, clippy::empty_loop)]
 
