@@ -5,58 +5,39 @@
 
 mod dummy_pin;
 
-use crate::dummy_pin::DummyPin;
-use cortex_m::{self as _, delay::Delay, prelude::*};
+use cortex_m::{self as _, delay::Delay};
 use cortex_m_rt::entry;
-use defmt::{debug, error, info};
+use defmt::{debug, info};
 use defmt_rtt as _;
-use display_interface_spi::SPIInterface;
 use embedded_alloc::LlffHeap as Heap;
 use embedded_graphics::{
     image::Image,
-    mono_font::{
-        MonoTextStyleBuilder,
-        ascii::{FONT_6X10, FONT_10X20},
-    },
-    pixelcolor::{BinaryColor, Rgb565},
+    mono_font::{MonoTextStyleBuilder, ascii::FONT_6X10},
+    pixelcolor::BinaryColor,
     prelude::*,
-    text::{Alignment, Baseline, Text},
+    text::{Baseline, Text},
 };
 use embedded_hal::{delay::DelayNs, spi::MODE_0};
 use embedded_hal_02::digital::v2::InputPin;
 use embedded_hal_bus::spi::ExclusiveDevice;
-use heapless::{String, Vec};
-use mousefood::{EmbeddedBackend, EmbeddedBackendConfig, prelude::Rgb888};
+use mousefood::{EmbeddedBackend, EmbeddedBackendConfig};
 use panic_probe as _;
-use ratatui::widgets::Borders;
 use rp_pico::{
     Pins,
     hal::{
         self, Adc, Clock, Sio, Spi, Watchdog,
         clocks::init_clocks_and_plls,
         fugit::RateExtU32,
-        gpio::{
-            self, FunctionI2C, FunctionSioOutput, FunctionSpi, Pin, PullNone,
-            bank0::{Gpio16, Gpio17, Gpio18, Gpio19},
-        },
-        multicore::{Multicore, Stack},
-        pwm::Slices,
-        spi::Enabled,
+        gpio::{FunctionI2C, FunctionSioOutput, FunctionSpi, PullNone},
     },
-    pac::{CorePeripherals, Peripherals, SPI0},
+    pac::{CorePeripherals, Peripherals},
 };
-use tinytga::{ParseError, Tga};
+use tinytga::Tga;
 
 const XTAL_FREQ_HZ: u32 = 12_000_000_u32;
 
-// static mut CORE1_STACK: Stack<4096> = Stack::new();
-
 #[global_allocator]
 static HEAP: Heap = Heap::empty();
-
-fn core1_task() {
-    loop {}
-}
 
 #[entry]
 fn main() -> ! {
@@ -68,7 +49,7 @@ fn main() -> ! {
 
     let mut p = Peripherals::take().unwrap();
     let cp = CorePeripherals::take().unwrap();
-    let mut sio = Sio::new(p.SIO);
+    let sio = Sio::new(p.SIO);
 
     let mut watchdog = Watchdog::new(p.WATCHDOG);
     let clocks = init_clocks_and_plls(
@@ -82,7 +63,7 @@ fn main() -> ! {
     )
     .unwrap();
 
-    let mut adc = Adc::new(p.ADC, &mut p.RESETS);
+    let _adc = Adc::new(p.ADC, &mut p.RESETS);
     let mut delay = Delay::new(cp.SYST, clocks.system_clock.freq().to_Hz());
     let mut timer = hal::Timer::new(p.TIMER, &mut p.RESETS, &clocks);
 
@@ -103,10 +84,10 @@ fn main() -> ! {
 
         let mut display = {
             use mipidsi::{
-                Builder, Display,
+                Builder,
                 interface::SpiInterface,
-                models::{self, Model},
-                options::{Orientation, RefreshOrder, Rotation},
+                models,
+                options::{Orientation, Rotation},
             };
 
             let device = ExclusiveDevice::new_no_delay(spi_bus, cs).unwrap();
@@ -132,8 +113,7 @@ fn main() -> ! {
         display.clear(RgbColor::WHITE).unwrap();
 
         if false {
-            use heapless::Vec;
-            use ratatui::{prelude::*, symbols::*, widgets::*};
+            use ratatui::{prelude::*, widgets::*};
 
             let backend = EmbeddedBackend::new(&mut display, EmbeddedBackendConfig::default());
             debug!("backend initialized");
@@ -154,13 +134,6 @@ fn main() -> ! {
                         .border_style(Style::new().yellow().bold())
                         .title("Mousefood");
                     frame.render_widget(paragraph.block(bordered_block), frame.area());
-
-                    // let line_gauge = LineGauge::default()
-                    //     .block(Block::bordered().title("Progress"))
-                    //     .filled_style(Style::new().white().on_black().bold())
-                    //     .filled_symbol(symbols::line::THICK_HORIZONTAL)
-                    //     .ratio(0.4);
-                    // frame.render_widget(line_gauge, frame.area());
                 })
                 .unwrap();
 
@@ -170,10 +143,6 @@ fn main() -> ! {
         if true {
             let tga = Tga::from_slice(include_bytes!("../assets/rust-pride.tga")).unwrap();
             let image = Image::new(&tga, Point::zero());
-            // tga.bounding_box().resized(
-            //     Size::new(100, 100),
-            //     embedded_graphics::geometry::AnchorPoint::TopLeft,
-            // );
 
             image.draw(&mut display).unwrap();
             image
@@ -184,8 +153,6 @@ fn main() -> ! {
     }
 
     if true {
-        use core::fmt::Write;
-        use embedded_hal_bus::i2c::*;
         use ssd1306::{I2CDisplayInterface, Ssd1306, prelude::*};
 
         let sda = pins
@@ -213,7 +180,7 @@ fn main() -> ! {
 
         display.init().unwrap();
 
-        display.clear(BinaryColor::Off);
+        let _ = display.clear(BinaryColor::Off);
         display.flush().unwrap();
 
         debug!("display initialized");
@@ -270,18 +237,18 @@ fn main() -> ! {
             Ok::<_, CharacterDisplayError<_>>(())
         })());
 
-        let a = pins.gpio12.into_pull_up_input();
+        let _a = pins.gpio12.into_pull_up_input();
         let b = pins.gpio13.into_pull_up_input();
-        let x = pins.gpio14.into_pull_up_input();
+        let _x = pins.gpio14.into_pull_up_input();
         let y = pins.gpio15.into_pull_up_input();
 
         loop {
             if b.is_low().unwrap() {
-                lcd.scroll_display_left();
+                let _ = lcd.scroll_display_left();
                 DelayNs::delay_ms(&mut timer, 200);
             }
             if y.is_low().unwrap() {
-                lcd.scroll_display_right();
+                let _ = lcd.scroll_display_right();
                 DelayNs::delay_ms(&mut timer, 200);
             }
         }
@@ -298,74 +265,4 @@ pub static PICOTOOL_ENTRIES: [rp_binary_info::EntryAddr; 5] = [
     rp_binary_info::rp_program_description!(c"Blinky Example"),
     rp_binary_info::rp_cargo_homepage_url!(),
     rp_binary_info::rp_program_build_attribute!(),
-];
-
-const HEAVY_PAYLOAD_DATA: [(f64, f64); 9] = [
-    (1965., 8200.),
-    (1967., 5400.),
-    (1981., 65400.),
-    (1989., 30800.),
-    (1997., 10200.),
-    (2004., 11600.),
-    (2014., 4500.),
-    (2016., 7900.),
-    (2018., 1500.),
-];
-
-const MEDIUM_PAYLOAD_DATA: [(f64, f64); 29] = [
-    (1963., 29500.),
-    (1964., 30600.),
-    (1965., 177_900.),
-    (1965., 21000.),
-    (1966., 17900.),
-    (1966., 8400.),
-    (1975., 17500.),
-    (1982., 8300.),
-    (1985., 5100.),
-    (1988., 18300.),
-    (1990., 38800.),
-    (1990., 9900.),
-    (1991., 18700.),
-    (1992., 9100.),
-    (1994., 10500.),
-    (1994., 8500.),
-    (1994., 8700.),
-    (1997., 6200.),
-    (1999., 18000.),
-    (1999., 7600.),
-    (1999., 8900.),
-    (1999., 9600.),
-    (2000., 16000.),
-    (2001., 10000.),
-    (2002., 10400.),
-    (2002., 8100.),
-    (2010., 2600.),
-    (2013., 13600.),
-    (2017., 8000.),
-];
-
-const SMALL_PAYLOAD_DATA: [(f64, f64); 23] = [
-    (1961., 118_500.),
-    (1962., 14900.),
-    (1975., 21400.),
-    (1980., 32800.),
-    (1988., 31100.),
-    (1990., 41100.),
-    (1993., 23600.),
-    (1994., 20600.),
-    (1994., 34600.),
-    (1996., 50600.),
-    (1997., 19200.),
-    (1997., 45800.),
-    (1998., 19100.),
-    (2000., 73100.),
-    (2003., 11200.),
-    (2008., 12600.),
-    (2010., 30500.),
-    (2012., 20000.),
-    (2013., 10600.),
-    (2013., 34500.),
-    (2015., 10600.),
-    (2018., 23100.),
-    (2019., 17300.),
 ];
