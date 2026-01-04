@@ -1,9 +1,7 @@
 #![no_std]
 #![no_main]
 //
-#![allow(unused, clippy::empty_loop)]
-
-mod dummy_pin;
+#![allow(clippy::empty_loop)]
 
 use cortex_m::{self as _, delay::Delay};
 use cortex_m_rt::entry;
