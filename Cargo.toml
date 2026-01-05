@@ -28,16 +28,58 @@ portable-atomic = { version = "1", default-features = false, features = [
 ratatui = { version = "0.30.0", default-features = false, features = [
     "portable-atomic",
 ] }
-rp-binary-info = "0.1.1"
-rp-pico = "0.9"
+rp-binary-info = "0.1.1" # Behövs denna nu? Vad är kopplingen till rp235xhal/binary-info?
+# rp-pico = "0.9"
 ssd1306 = "0.10.0"
 tinytga = "0.5.0"
+rp235x-hal = { version = "0.3", features = [
+    "rt",
+    "critical-section-impl",
+    "binary-info",
+] }
+fugit = "0.3.9"
 
 [patch.crates-io]
 cortex-m = { git = "https://github.com/rust-embedded/cortex-m" }
 
+# cargo build/run
+[profile.dev]
+debug = 2
+debug-assertions = true
+opt-level = 2
+overflow-checks = true
+
+# cargo build/run --release
 [profile.release]
-codegen-units = 1
-lto = true
-opt-level = "s"
-debug = true
+debug = 2
+debug-assertions = false
+lto = 'fat'
+opt-level = 2
+overflow-checks = false
+
+# do not optimize proc-macro crates = faster builds from scratch
+[profile.dev.build-override]
+debug = false
+debug-assertions = false
+overflow-checks = false
+opt-level = 0
+
+[profile.release.build-override]
+debug = false
+debug-assertions = false
+overflow-checks = false
+opt-level = 0
+
+# cargo test
+[profile.test]
+debug = 2
+debug-assertions = true
+opt-level = 2
+overflow-checks = true
+
+# cargo test --release
+[profile.bench]
+debug = 2
+debug-assertions = false
+lto = 'fat'
+opt-level = 3
