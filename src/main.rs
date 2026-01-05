@@ -16,7 +16,7 @@ use embedded_graphics::{
     text::{Baseline, Text},
 };
 use embedded_hal::{delay::DelayNs, spi::MODE_0};
-use embedded_hal_02::digital::v2::InputPin;
+use embedded_hal_02::digital::v2::{InputPin, OutputPin as _};
 use embedded_hal_bus::spi::ExclusiveDevice;
 use fugit::RateExtU32 as _;
 use mousefood::{EmbeddedBackend, EmbeddedBackendConfig};
@@ -24,8 +24,9 @@ use panic_probe as _;
 use rp235x_hal::{
     Adc, Clock as _, I2C, Sio, Spi, Timer, Watchdog, block,
     clocks::init_clocks_and_plls,
-    gpio::{FunctionI2C, FunctionSioOutput, FunctionSpi, Pins, PullNone},
+    gpio::{FunctionI2C, FunctionPio0, FunctionSioOutput, FunctionSpi, Pin, Pins, PullNone},
     pac::Peripherals,
+    pio::PIOExt as _,
 };
 use tinytga::Tga;
 
@@ -204,6 +205,61 @@ fn main() -> ! {
 
             debug!("...done");
         }
+    }
+
+    if true {
+        // let pwr = Output::new(p.PIN_23, Level::Low);
+        let mut pwr = pins.gpio23.into_push_pull_output();
+        pwr.set_low().unwrap();
+
+        // let cs = Output::new(p.PIN_25, Level::High);
+        let mut cs = pins.gpio25.into_push_pull_output();
+        cs.set_high().unwrap();
+
+        // let mut pio = Pio::new(p.PIO0, Irqs);
+        let (mut pio0, sm0, _sm1, _sm2, _sm3) = p.PIO0.split(&mut p.RESETS);
+
+        let _mosi = pins.gpio24.reconfigure::<FunctionSpi, PullNone>();
+        let _sck = pins.gpio29.reconfigure::<FunctionSpi, PullNone>();
+
+        // let spi = PioSpi::new(
+        //     &mut pio.common,
+        //     pio.sm0,
+        //     RM2_CLOCK_DIVIDER,
+        //     pio.irq0,
+        //     cs,
+        //     p.PIN_24,
+        //     p.PIN_29,
+        //     p.DMA_CH0,
+        // );
+
+        //         let spi_sclk = pins.gpio18.reconfigure::<FunctionSpi, PullNone>();
+        // let spi_mosi = pins.gpio19.reconfigure::<FunctionSpi, PullNone>();
+        // let spi_bus = Spi::<_, _, _, 8>::new(p.SPI0, (spi_mosi, spi_sclk)).init(
+        //     &mut p.RESETS,
+        //     125u32.MHz(),
+        //     16u32.MHz(),
+        //     MODE_0,
+        // );
+
+        let spi = Spi::<_, _, _, 8>::new(p.SPI0, (_mosi, _sck)).init(
+            &mut p.RESETS,
+            /* spi_freq_hz */ 8_000_000u32,
+            &embedded_hal::spi::MODE_0,
+        );
+
+        // let (_net_device, mut control) = setup_radio(&spawner, pwr, spi).await;
+
+        // let one_sec = Duration::from_secs(1);
+        // loop {
+        //     info!("led on!");
+        //     control.gpio_set(0, true).await;
+        //     Timer::after(delay).await;
+
+        //     info!("led off!");
+        //     control.gpio_set(0, false).await;
+        //     Timer::after(delay).await;
+        // }
     }
 
     if true {
