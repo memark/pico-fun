@@ -23,10 +23,14 @@ use mousefood::{EmbeddedBackend, EmbeddedBackendConfig};
 use panic_probe as _;
 use rp235x_hal::{
     Adc, Clock as _, I2C, Sio, Spi, Timer, Watchdog, block,
-    clocks::init_clocks_and_plls,
-    gpio::{FunctionI2C, FunctionPio0, FunctionSioOutput, FunctionSpi, Pin, Pins, PullNone},
-    pac::Peripherals,
+    clocks::{ClocksManager, init_clocks_and_plls},
+    gpio::{
+        FunctionI2C, FunctionPio0, FunctionSio, FunctionSioOutput, FunctionSpi, Pin, Pins,
+        PullNone, PullUp, SioInput, bank0::*,
+    },
+    pac::{I2C1, Peripherals, RESETS},
     pio::PIOExt as _,
+    timer::CopyableTimer0,
 };
 use tinytga::Tga;
 
@@ -69,6 +73,12 @@ fn main() -> ! {
 
     let pins = Pins::new(p.IO_BANK0, p.PADS_BANK0, sio.gpio_bank0, &mut p.RESETS);
 
+    let _a = pins.gpio12.into_pull_up_input();
+    let b = pins.gpio13.into_pull_up_input();
+    let _x = pins.gpio14.into_pull_up_input();
+    let y = pins.gpio15.into_pull_up_input();
+
+    // SPI0, MIPIDSI, ST7789
     if true {
         let spi_sclk = pins.gpio18.reconfigure::<FunctionSpi, PullNone>();
         let spi_mosi = pins.gpio19.reconfigure::<FunctionSpi, PullNone>();
@@ -112,6 +122,7 @@ fn main() -> ! {
         // Colors are inverted...
         display.clear(RgbColor::WHITE).unwrap();
 
+        // Ratatui
         if false {
             use ratatui::{prelude::*, widgets::*};
 
@@ -140,6 +151,7 @@ fn main() -> ! {
             debug!("...done");
         }
 
+        // Tinytga
         if true {
             let tga = Tga::from_slice(include_bytes!("../assets/rust-pride.tga")).unwrap();
             let image = Image::new(&tga, Point::zero());
@@ -152,18 +164,12 @@ fn main() -> ! {
         }
     }
 
+    // I2C0, SSD1306
     if true {
         use ssd1306::{I2CDisplayInterface, Ssd1306, prelude::*};
 
-        let sda = pins
-            .gpio20
-            .into_pull_up_input()
-            .into_function::<FunctionI2C>();
-        let scl = pins
-            .gpio21
-            .into_pull_up_input()
-            .into_function::<FunctionI2C>();
-
+        let sda = pins.gpio20.reconfigure();
+        let scl = pins.gpio21.reconfigure();
         let i2c = I2C::i2c0(
             p.I2C0,
             sda,
@@ -207,6 +213,7 @@ fn main() -> ! {
         }
     }
 
+    // Try W blinky
     if true {
         // let pwr = Output::new(p.PIN_23, Level::Low);
         let mut pwr = pins.gpio23.into_push_pull_output();
@@ -242,11 +249,11 @@ fn main() -> ! {
         //     MODE_0,
         // );
 
-        let spi = Spi::<_, _, _, 8>::new(p.SPI0, (_mosi, _sck)).init(
-            &mut p.RESETS,
-            /* spi_freq_hz */ 8_000_000u32,
-            &embedded_hal::spi::MODE_0,
-        );
+        // let spi = Spi::<_, _, _, 8>::new(p.SPI0, (_mosi, _sck)).init(
+        //     &mut p.RESETS,
+        //     /* spi_freq_hz */ 8_000_000u32,
+        //     &embedded_hal::spi::MODE_0,
+        // );
 
         // let (_net_device, mut control) = setup_radio(&spawner, pwr, spi).await;
 
@@ -262,60 +269,62 @@ fn main() -> ! {
         // }
     }
 
+    // I2C, LCD PCF8574T
     if true {
-        use i2c_character_display::*;
-
-        let sda = pins
-            .gpio6
-            .into_pull_up_input()
-            .into_function::<FunctionI2C>();
-        let scl = pins
-            .gpio7
-            .into_pull_up_input()
-            .into_function::<FunctionI2C>();
-
-        let i2c = I2C::i2c1(
-            p.I2C1,
-            sda,
-            scl,
-            400.kHz(),
-            &mut p.RESETS,
-            clocks.system_clock.freq(),
-        );
-
-        let mut lcd = CharacterDisplayPCF8574T::new(i2c, LcdDisplayType::Lcd16x2, delay);
-
-        defmt::unwrap!((|| {
-            lcd.init()?;
-            debug!("display initialized");
-
-            debug!("drawing...");
-            lcd.clear()?.home()?.print("Hello, LCD!")?;
-            debug!("...done");
-
-            Ok::<_, CharacterDisplayError<_>>(())
-        })());
-
-        let _a = pins.gpio12.into_pull_up_input();
-        let b = pins.gpio13.into_pull_up_input();
-        let _x = pins.gpio14.into_pull_up_input();
-        let y = pins.gpio15.into_pull_up_input();
+        let lcd = setup_lcd16xx2(pins, clocks, delay, &mut timer, p.I2C1, &mut p.RESETS);
 
         loop {
             if b.is_low().unwrap() {
                 debug!("B pressed");
                 let _ = lcd.scroll_display_left();
-                DelayNs::delay_ms(&mut timer, 200);
+                DelayNs::delay_ms(timer, 200);
             }
             if y.is_low().unwrap() {
                 debug!("Y pressed");
                 let _ = lcd.scroll_display_right();
-                DelayNs::delay_ms(&mut timer, 200);
+                DelayNs::delay_ms(timer, 200);
             }
         }
     }
 
     loop {}
+}
+
+fn setup_lcd16xx2(
+    pins: Pins,
+    clocks: ClocksManager,
+    delay: Delay,
+    timer: &mut Timer<CopyableTimer0>,
+    i2c1: I2C1,
+    resets: &mut RESETS,
+) -> () {
+    use i2c_character_display::*;
+
+    let sda = pins.gpio6.reconfigure();
+    let scl = pins.gpio7.reconfigure();
+    let i2c = I2C::i2c1(
+        i2c1,
+        sda,
+        scl,
+        400.kHz(),
+        resets,
+        clocks.system_clock.freq(),
+    );
+
+    let mut lcd = CharacterDisplayPCF8574T::new(i2c, LcdDisplayType::Lcd16x2, delay);
+
+    defmt::unwrap!((|| {
+        lcd.init()?;
+        debug!("display initialized");
+
+        debug!("drawing...");
+        lcd.clear()?.home()?.print("Hello, LCD!")?;
+        debug!("...done");
+
+        Ok::<_, CharacterDisplayError<_>>(())
+    })());
+
+    lcd
 }
 
 /// Program metadata for `picotool info`
